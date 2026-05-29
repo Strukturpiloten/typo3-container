@@ -1,0 +1,21 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "extends": [
+        "config:recommended"
+    ],
+    "packageRules": [
+        {
+            "description": "Treat container-setup submodule tags like v1.2.0 as semantic versions",
+            "matchManagers": [
+                "git-submodules"
+            ],
+            "matchDepNames": [
+                "deps/container-setup"
+            ],
+            "versioning": "semver-coerced"
+        }
+    ],
+    "git-submodules": {
+        "enabled": true
+    }
+}

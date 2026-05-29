@@ -1,0 +1,8 @@
+# Ignore everything
+*
+
+# except:
+!.gitignore
+!typo3_config_default.php
+!typo3_setup_default.sh
+!entrypoint_default.sh

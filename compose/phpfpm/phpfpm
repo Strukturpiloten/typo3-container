@@ -1,0 +1,43 @@
+ARG PODMAN_PHPFPM_IMAGE
+FROM ${PODMAN_PHPFPM_IMAGE}
+
+ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
+
+RUN apk update && \
+    apk upgrade && \
+    apk add --no-cache \
+    ca-certificates \
+    git \
+    supercronic \
+    tzdata
+
+RUN install-php-extensions \
+    @composer \
+    apcu \
+    exif \
+    gd \
+    gmp \
+    imagick \
+    intl \
+    pcntl \
+    pdo_mysql \
+    pdo_pgsql \
+    pgsql \
+    phar \
+    redis \
+    sodium \
+    sysvsem \
+    zip
+
+RUN mv "${PHP_INI_DIR}/php.ini-production" "${PHP_INI_DIR}/php.ini"
+
+ARG PODMAN_TYPO3_DATA_DIR_CONTAINER
+RUN mkdir -p /opt/container-utilities/shell ${PODMAN_TYPO3_DATA_DIR_CONTAINER}
+COPY deps/container-utilities/shell/check_variables_and_directories.sh /opt/container-utilities/shell/check_variables_and_directories.sh
+
+WORKDIR /var/www/typo3
+
+ENV HOME /home/www-data
+RUN chmod 777 /home/www-data
+
+STOPSIGNAL SIGKILL

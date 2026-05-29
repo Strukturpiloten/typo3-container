@@ -1,0 +1,7 @@
+# Ignore everything
+*
+
+# except:
+!.gitignore
+!cron/
+!entrypoint_default.sh

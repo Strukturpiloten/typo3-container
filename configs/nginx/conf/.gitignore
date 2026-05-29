@@ -1,0 +1,7 @@
+# Ignore everything
+*
+
+# except:
+!.gitignore
+!typo3_default.conf.tmpl
+!typo3_original.conf
