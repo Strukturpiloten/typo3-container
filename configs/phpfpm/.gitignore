@@ -1,0 +1,8 @@
+# Ignore everything
+*
+
+# except:
+!.gitignore
+!conf/
+!ini/
+!typo3_status.php
