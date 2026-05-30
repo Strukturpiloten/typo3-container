@@ -33,7 +33,7 @@
     ],
     "postUpgradeTasks": {
         "commands": [
-            "case \"{{{packageName}}}\" in Strukturpiloten/container-setup) version=$(sed -n 's/^CONTAINER_SETUP_VERSION=\"\\([^\"]*\\)\"$/\\1/p' deps/container-setup/setup.sh); test -n \"$version\" && curl -fsSLo deps/container-setup/setup.sh \"https://github.com/Strukturpiloten/container-setup/releases/download/$version/setup.sh\" && chmod 0755 deps/container-setup/setup.sh ;; *) true ;; esac"
+            "case \"{{{packageName}}}\" in Strukturpiloten/container-setup) setup_version=$(sed -n 's/^CONTAINER_SETUP_VERSION=\"\\([^\"]*\\)\"$/\\1/p' deps/container-setup/setup.sh); test -n \"$setup_version\" && curl -fsSLo deps/container-setup/setup.sh \"https://github.com/Strukturpiloten/container-setup/releases/download/$setup_version/setup.sh\" && chmod 0755 deps/container-setup/setup.sh ;; *) true ;; esac"
         ],
         "fileFilters": [
             "deps/container-setup/setup.sh"
