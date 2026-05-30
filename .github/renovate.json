@@ -57,6 +57,20 @@
         },
         {
             "customType": "regex",
+            "description": "Track pinned Syft binary releases in GitHub workflows",
+            "managerFilePatterns": [
+                "/^\\.github\\/workflows\\/[^\\/]+\\.yml$/"
+            ],
+            "matchStrings": [
+                "SYFT_VERSION:\\s*(?<currentValue>v?\\d+\\.\\d+\\.\\d+)"
+            ],
+            "depNameTemplate": "anchore/syft",
+            "packageNameTemplate": "anchore/syft",
+            "datasourceTemplate": "github-releases",
+            "versioningTemplate": "semver-coerced"
+        },
+        {
+            "customType": "regex",
             "description": "Track the vendored container-setup release setup.sh asset",
             "managerFilePatterns": [
                 "/^deps\\/container-setup\\/setup\\.sh$/"
@@ -122,6 +136,16 @@
             "commitMessageTopic": "cosign"
         },
         {
+            "description": "Use a readable topic for Syft updates",
+            "matchManagers": [
+                "custom.regex"
+            ],
+            "matchPackageNames": [
+                "anchore/syft"
+            ],
+            "commitMessageTopic": "syft"
+        },
+        {
             "description": "Automerge pinned container digest updates",
             "matchManagers": [
                 "custom.regex"
@@ -170,6 +194,7 @@
             ],
             "matchPackageNames": [
                 "Strukturpiloten/container-setup",
+                "anchore/syft",
                 "mlocati/docker-php-extension-installer",
                 "sigstore/cosign"
             ],
