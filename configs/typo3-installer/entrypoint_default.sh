@@ -89,8 +89,8 @@ composer exec -- vendor/bin/typo3 extension:setup
 # Optional installation steps
 
 if [ -n "${TYPO3_OPTIONAL_INSTALL_COMMANDS:-}" ]; then
-  echo "Running optional installation commands."
+  echo "Running optional typo3-installer commands."
   printf '%s\n' "${TYPO3_OPTIONAL_INSTALL_COMMANDS}" | sh -e
 fi
 
-echo "Typo3 setup completed. Installer container finished."
+echo "TYPO3 setup completed. typo3-installer container finished."
