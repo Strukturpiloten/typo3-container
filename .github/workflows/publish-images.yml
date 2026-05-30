@@ -1,4 +1,4 @@
-name: Publish TYPO3 images
+name: Publish images
 
 on:
     push:
@@ -6,7 +6,19 @@ on:
             - main
         tags:
             - "v*"
+        paths:
+            - ".env.tmpl"
+            - ".github/workflows/publish-images.yml"
+            - "compose/**"
+            - "configs/**"
+            - "deps/container-utilities/**"
+    schedule:
+        - cron: "47 3 * * *"
     workflow_dispatch:
+
+concurrency:
+    group: publish-images-${{ github.ref }}
+    cancel-in-progress: true
 
 permissions:
     contents: read
@@ -17,7 +29,7 @@ env:
     OCI_VENDOR: Strukturpiloten
 
 jobs:
-    publish-typo3-images:
+    publish-images:
         runs-on: ubuntu-latest
         strategy:
             fail-fast: false
@@ -75,6 +87,7 @@ jobs:
                       type=sha,prefix=sha-
                       type=semver,pattern={{version}},value=${{ github.ref_name }}
                       type=semver,pattern={{major}}.{{minor}},value=${{ github.ref_name }}
+                      type=semver,pattern={{major}},value=${{ github.ref_name }}
 
             - name: Set up QEMU
               uses: docker/setup-qemu-action@v3
@@ -96,6 +109,8 @@ jobs:
                   file: ${{ matrix.dockerfile }}
                   platforms: linux/amd64,linux/arm64
                   push: true
+                  pull: true
+                  no-cache: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
                   tags: ${{ steps.meta.outputs.tags }}
                   cache-from: type=gha
                   cache-to: type=gha,mode=max
