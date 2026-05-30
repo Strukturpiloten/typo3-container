@@ -12,9 +12,9 @@ networks:
     external: true
 {{- end }}
 services:
-  phpfpm:
-    hostname: phpfpm
-    image: ${PODMAN_NAMESPACE}-${PODMAN_SERVICE}-${PODMAN_STAGE}-phpfpm:latest
+  typo3-phpfpm:
+    hostname: typo3-phpfpm
+    image: ${PODMAN_NAMESPACE}-${PODMAN_SERVICE}-${PODMAN_STAGE}-typo3-phpfpm:latest
     restart: unless-stopped
     networks:
       - backend
@@ -22,9 +22,9 @@ services:
     userns_mode: "keep-id"
     volumes:
       # shared
-      - ${PODMAN_PHPFPM_CONF_FILE_HOST}:${PODMAN_PHPFPM_CONF_FILE_CONTAINER}:ro,z
-      - ${PODMAN_PHPFPM_INI_FILE_HOST}:${PODMAN_PHPFPM_INI_FILE_CONTAINER}:ro,z
-      # - ${PODMAN_PHPFPM_HEALTHCHECK_FILE_HOST}:${PODMAN_PHPFPM_HEALTHCHECK_FILE_CONTAINER}:ro,z
+      - ${PODMAN_TYPO3PHPFPM_CONF_FILE_HOST}:${PODMAN_TYPO3PHPFPM_CONF_FILE_CONTAINER}:ro,z
+      - ${PODMAN_TYPO3PHPFPM_INI_FILE_HOST}:${PODMAN_TYPO3PHPFPM_INI_FILE_CONTAINER}:ro,z
+      # - ${PODMAN_TYPO3PHPFPM_HEALTHCHECK_FILE_HOST}:${PODMAN_TYPO3PHPFPM_HEALTHCHECK_FILE_CONTAINER}:ro,z
       - ${PODMAN_TYPO3_DATA_DIR_HOST}:${PODMAN_TYPO3_DATA_DIR_CONTAINER}:z
     environment:
       # Storage
@@ -40,12 +40,12 @@ services:
       - TYPO3_VERSION=${TYPO3_VERSION}
     build:
       context: {{ printf "%q" .ProjectDir }}
-      dockerfile: compose/phpfpm/phpfpm
+      dockerfile: compose/typo3-phpfpm/typo3-phpfpm
       args:
-        PODMAN_PHPFPM_IMAGE: ${PODMAN_PHPFPM_IMAGE}
+        PODMAN_TYPO3PHPFPM_IMAGE: ${PODMAN_TYPO3PHPFPM_IMAGE}
         PODMAN_TYPO3_DATA_DIR_CONTAINER: ${PODMAN_TYPO3_DATA_DIR_CONTAINER}
     # healthcheck:
-    #   test: php -f "${PODMAN_PHPFPM_HEALTHCHECK_FILE_CONTAINER}" || exit 1
+      #   test: php -f "${PODMAN_TYPO3PHPFPM_HEALTHCHECK_FILE_CONTAINER}" || exit 1
     #   start_period: 10s
     #   interval: 10s
     #   timeout: 5s
@@ -54,28 +54,34 @@ services:
       {{ .DatabaseSQLService }}:
         condition: service_healthy
         required: true
-      manager:
+      typo3-manager:
         # condition: service_healthy
         condition: service_started
         required: true
-  installer:
-    hostname: installer
+  typo3-installer:
+    hostname: typo3-installer
     restart: "no"
-    image: ${PODMAN_NAMESPACE}-${PODMAN_SERVICE}-${PODMAN_STAGE}-phpfpm:latest
+    image: ${PODMAN_NAMESPACE}-${PODMAN_SERVICE}-${PODMAN_STAGE}-typo3-installer:latest
     pull_policy: never
     networks:
       - backend
     user: "${PODMAN_USER_UID}:${PODMAN_GROUP_GID}"
     userns_mode: "keep-id"
     command: [ "sh", "/etc/entrypoint.sh" ]
+    build:
+      context: {{ printf "%q" .ProjectDir }}
+      dockerfile: compose/typo3-installer/typo3-installer
+      args:
+        PODMAN_TYPO3PHPFPM_IMAGE: ${PODMAN_TYPO3PHPFPM_IMAGE}
+        PODMAN_TYPO3_DATA_DIR_CONTAINER: ${PODMAN_TYPO3_DATA_DIR_CONTAINER}
     volumes:
       # private
-      - ${PODMAN_INSTALLER_ENTRYPOINT_SCRIPT_FILE_HOST}:${PODMAN_INSTALLER_ENTRYPOINT_SCRIPT_FILE_CONTAINER}:ro,Z
-      # - ${PODMAN_INSTALLER_TYPO3_CONFIG_SCRIPT_FILE_HOST}:${PODMAN_INSTALLER_TYPO3_CONFIG_SCRIPT_FILE_CONTAINER}:ro,Z
-      # - ${PODMAN_INSTALLER_TYPO3_SETUP_SCRIPT_FILE_HOST}:${PODMAN_INSTALLER_TYPO3_SETUP_SCRIPT_FILE_CONTAINER}:ro,Z
+      - ${PODMAN_TYPO3INSTALLER_ENTRYPOINT_SCRIPT_FILE_HOST}:${PODMAN_TYPO3INSTALLER_ENTRYPOINT_SCRIPT_FILE_CONTAINER}:ro,Z
+      # - ${PODMAN_TYPO3INSTALLER_CONFIG_SCRIPT_FILE_HOST}:${PODMAN_TYPO3INSTALLER_CONFIG_SCRIPT_FILE_CONTAINER}:ro,Z
+      # - ${PODMAN_TYPO3INSTALLER_SETUP_SCRIPT_FILE_HOST}:${PODMAN_TYPO3INSTALLER_SETUP_SCRIPT_FILE_CONTAINER}:ro,Z
       # shared
-      - ${PODMAN_PHPFPM_CONF_FILE_HOST}:${PODMAN_PHPFPM_CONF_FILE_CONTAINER}:ro,z
-      - ${PODMAN_PHPFPM_INI_FILE_HOST}:${PODMAN_PHPFPM_INI_FILE_CONTAINER}:ro,z
+      - ${PODMAN_TYPO3PHPFPM_CONF_FILE_HOST}:${PODMAN_TYPO3PHPFPM_CONF_FILE_CONTAINER}:ro,z
+      - ${PODMAN_TYPO3PHPFPM_INI_FILE_HOST}:${PODMAN_TYPO3PHPFPM_INI_FILE_CONTAINER}:ro,z
       - ${PODMAN_TYPO3_DATA_DIR_HOST}:${PODMAN_TYPO3_DATA_DIR_CONTAINER}:z
     depends_on:
       {{ .DatabaseSQLService }}:
@@ -83,10 +89,10 @@ services:
         required: true
     environment:
       # Storage
-      - PODMAN_INSTALLER_TYPO3_CONFIG_SCRIPT_FILE_CONTAINER=${PODMAN_INSTALLER_TYPO3_CONFIG_SCRIPT_FILE_CONTAINER}
-      - PODMAN_INSTALLER_TYPO3_SETUP_SCRIPT_FILE_CONTAINER=${PODMAN_INSTALLER_TYPO3_SETUP_SCRIPT_FILE_CONTAINER}
-      - PODMAN_PHPFPM_CONF_FILE_CONTAINER=${PODMAN_PHPFPM_CONF_FILE_CONTAINER}
-      - PODMAN_PHPFPM_INI_FILE_CONTAINER=${PODMAN_PHPFPM_INI_FILE_CONTAINER}
+      - PODMAN_TYPO3INSTALLER_CONFIG_SCRIPT_FILE_CONTAINER=${PODMAN_TYPO3INSTALLER_CONFIG_SCRIPT_FILE_CONTAINER}
+      - PODMAN_TYPO3INSTALLER_SETUP_SCRIPT_FILE_CONTAINER=${PODMAN_TYPO3INSTALLER_SETUP_SCRIPT_FILE_CONTAINER}
+      - PODMAN_TYPO3PHPFPM_CONF_FILE_CONTAINER=${PODMAN_TYPO3PHPFPM_CONF_FILE_CONTAINER}
+      - PODMAN_TYPO3PHPFPM_INI_FILE_CONTAINER=${PODMAN_TYPO3PHPFPM_INI_FILE_CONTAINER}
       - PODMAN_TYPO3_DATA_DIR_CONTAINER=${PODMAN_TYPO3_DATA_DIR_CONTAINER}
       - PODMAN_TYPO3_USER_DATA_DIR_CONTAINER=${PODMAN_TYPO3_USER_DATA_DIR_CONTAINER}
       # DatabaseSQL
@@ -109,27 +115,33 @@ services:
       - TYPO3_SETUP_ADMIN_EMAIL=${TYPO3_SETUP_ADMIN_EMAIL}
       - TYPO3_SETUP_CREATE_SITE=${TYPO3_SETUP_CREATE_SITE}
       - TYPO3_OPTIONAL_INSTALL_COMMANDS=${TYPO3_OPTIONAL_INSTALL_COMMANDS}
-  manager:
-    hostname: manager
+  typo3-manager:
+    hostname: typo3-manager
     restart: unless-stopped
-    image: ${PODMAN_NAMESPACE}-${PODMAN_SERVICE}-${PODMAN_STAGE}-phpfpm:latest
+    image: ${PODMAN_NAMESPACE}-${PODMAN_SERVICE}-${PODMAN_STAGE}-typo3-manager:latest
     pull_policy: never
     networks:
       - backend
     user: "${PODMAN_USER_UID}:${PODMAN_GROUP_GID}"
     userns_mode: "keep-id"
     command: [ "sh", "/etc/entrypoint.sh" ]
+    build:
+      context: {{ printf "%q" .ProjectDir }}
+      dockerfile: compose/typo3-manager/typo3-manager
+      args:
+        PODMAN_TYPO3PHPFPM_IMAGE: ${PODMAN_TYPO3PHPFPM_IMAGE}
+        PODMAN_TYPO3_DATA_DIR_CONTAINER: ${PODMAN_TYPO3_DATA_DIR_CONTAINER}
     volumes:
       # private
-      - ${PODMAN_MANAGER_CRON_ROOT_FILE_HOST}:${PODMAN_MANAGER_CRON_ROOT_FILE_CONTAINER}:ro,Z
-      - ${PODMAN_MANAGER_ENTRYPOINT_SCRIPT_FILE_HOST}:${PODMAN_MANAGER_ENTRYPOINT_SCRIPT_FILE_CONTAINER}:ro,Z
+      - ${PODMAN_TYPO3MANAGER_CRON_ROOT_FILE_HOST}:${PODMAN_TYPO3MANAGER_CRON_ROOT_FILE_CONTAINER}:ro,Z
+      - ${PODMAN_TYPO3MANAGER_ENTRYPOINT_SCRIPT_FILE_HOST}:${PODMAN_TYPO3MANAGER_ENTRYPOINT_SCRIPT_FILE_CONTAINER}:ro,Z
       # shared
-      - ${PODMAN_PHPFPM_CONF_FILE_HOST}:${PODMAN_PHPFPM_CONF_FILE_CONTAINER}:ro,z
-      # - ${PODMAN_PHPFPM_HEALTHCHECK_FILE_HOST}:${PODMAN_PHPFPM_HEALTHCHECK_FILE_CONTAINER}:ro,z
-      - ${PODMAN_PHPFPM_INI_FILE_HOST}:${PODMAN_PHPFPM_INI_FILE_CONTAINER}:ro,z
+      - ${PODMAN_TYPO3PHPFPM_CONF_FILE_HOST}:${PODMAN_TYPO3PHPFPM_CONF_FILE_CONTAINER}:ro,z
+      # - ${PODMAN_TYPO3PHPFPM_HEALTHCHECK_FILE_HOST}:${PODMAN_TYPO3PHPFPM_HEALTHCHECK_FILE_CONTAINER}:ro,z
+      - ${PODMAN_TYPO3PHPFPM_INI_FILE_HOST}:${PODMAN_TYPO3PHPFPM_INI_FILE_CONTAINER}:ro,z
       - ${PODMAN_TYPO3_DATA_DIR_HOST}:${PODMAN_TYPO3_DATA_DIR_CONTAINER}:z
     # healthcheck:
-    #   test: php -f "${PODMAN_PHPFPM_HEALTHCHECK_FILE_CONTAINER}" || exit 1
+    #   test: php -f "${PODMAN_TYPO3PHPFPM_HEALTHCHECK_FILE_CONTAINER}" || exit 1
     #   start_period: 10s
     #   interval: 10s
     #   timeout: 5s
@@ -138,15 +150,15 @@ services:
       {{ .DatabaseSQLService }}:
         condition: service_healthy
         required: true
-      installer:
+      typo3-installer:
         condition: service_completed_successfully
         required: true
     environment:
       # Storage
-      - PODMAN_MANAGER_CRON_ROOT_FILE_CONTAINER=${PODMAN_MANAGER_CRON_ROOT_FILE_CONTAINER}
-      - PODMAN_PHPFPM_CONF_FILE_CONTAINER=${PODMAN_PHPFPM_CONF_FILE_CONTAINER}
-      - PODMAN_PHPFPM_INI_FILE_CONTAINER=${PODMAN_PHPFPM_INI_FILE_CONTAINER}
-      # - PODMAN_PHPFPM_HEALTHCHECK_FILE_CONTAINER=${PODMAN_PHPFPM_HEALTHCHECK_FILE_CONTAINER}
+      - PODMAN_TYPO3MANAGER_CRON_ROOT_FILE_CONTAINER=${PODMAN_TYPO3MANAGER_CRON_ROOT_FILE_CONTAINER}
+      - PODMAN_TYPO3PHPFPM_CONF_FILE_CONTAINER=${PODMAN_TYPO3PHPFPM_CONF_FILE_CONTAINER}
+      - PODMAN_TYPO3PHPFPM_INI_FILE_CONTAINER=${PODMAN_TYPO3PHPFPM_INI_FILE_CONTAINER}
+      # - PODMAN_TYPO3PHPFPM_HEALTHCHECK_FILE_CONTAINER=${PODMAN_TYPO3PHPFPM_HEALTHCHECK_FILE_CONTAINER}
       - PODMAN_TYPO3_DATA_DIR_CONTAINER=${PODMAN_TYPO3_DATA_DIR_CONTAINER}
       # DatabaseSQL
       - DATABASE_SQL_SERVICE=${DATABASE_SQL_SERVICE}
@@ -215,7 +227,7 @@ services:
     #   timeout: 5s
     #   retries: 3
     depends_on:
-      phpfpm:
+      typo3-phpfpm:
         # condition: service_healthy
         condition: service_started
         required: true
