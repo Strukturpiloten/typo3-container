@@ -177,7 +177,7 @@ jobs:
           sudo buildah push --format oci "${LOCAL_IMAGE}" "oci-archive:${ARCHIVE_PATH}"
 
       - name: Upload architecture image archive
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.prep.outputs.artifact_name }}
           path: ${{ steps.prep.outputs.archive_path }}
@@ -199,13 +199,13 @@ jobs:
           sudo apt-get install --yes --no-install-recommends jq podman skopeo
 
       - name: Download amd64 image archive
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: typo3-phpfpm-amd64-oci-archive
           path: ${{ runner.temp }}/oci-archives/amd64
 
       - name: Download arm64 image archive
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: typo3-phpfpm-arm64-oci-archive
           path: ${{ runner.temp }}/oci-archives/arm64
@@ -266,8 +266,8 @@ jobs:
           sudo skopeo copy "oci-archive:${ARM64_ARCHIVE}" "containers-storage:${local_image_arm64}"
 
           sudo podman manifest create "${manifest_name}"
-          sudo podman manifest add --arch amd64 "${manifest_name}" "${local_image_amd64}"
-          sudo podman manifest add --arch arm64 "${manifest_name}" "${local_image_arm64}"
+          sudo podman manifest add --arch amd64 "${manifest_name}" "containers-storage:${local_image_amd64}"
+          sudo podman manifest add --arch arm64 "${manifest_name}" "containers-storage:${local_image_arm64}"
 
           while IFS= read -r tag; do
             [ -n "${tag}" ] || continue
