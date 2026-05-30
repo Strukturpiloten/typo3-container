@@ -1,6 +1,3 @@
 [submodule "deps/container-utilities"]
 	path = deps/container-utilities
 	url = https://github.com/Strukturpiloten/container-utilities
-[submodule "deps/container-setup"]
-	path = deps/container-setup
-	url = https://github.com/Strukturpiloten/container-setup
