@@ -61,19 +61,13 @@ services:
   typo3-installer:
     hostname: typo3-installer
     restart: "no"
-    image: ${PODMAN_NAMESPACE}-${PODMAN_SERVICE}-${PODMAN_STAGE}-typo3-installer:latest
+    image: ${PODMAN_NAMESPACE}-${PODMAN_SERVICE}-${PODMAN_STAGE}-typo3-phpfpm:latest
     pull_policy: never
     networks:
       - backend
     user: "${PODMAN_USER_UID}:${PODMAN_GROUP_GID}"
     userns_mode: "keep-id"
     command: [ "sh", "/etc/entrypoint.sh" ]
-    build:
-      context: {{ printf "%q" .ProjectDir }}
-      dockerfile: compose/typo3-installer/typo3-installer
-      args:
-        PODMAN_TYPO3PHPFPM_IMAGE: ${PODMAN_TYPO3PHPFPM_IMAGE}
-        PODMAN_TYPO3_DATA_DIR_CONTAINER: ${PODMAN_TYPO3_DATA_DIR_CONTAINER}
     volumes:
       # private
       - ${PODMAN_TYPO3INSTALLER_ENTRYPOINT_SCRIPT_FILE_HOST}:${PODMAN_TYPO3INSTALLER_ENTRYPOINT_SCRIPT_FILE_CONTAINER}:ro,Z
@@ -118,19 +112,13 @@ services:
   typo3-manager:
     hostname: typo3-manager
     restart: unless-stopped
-    image: ${PODMAN_NAMESPACE}-${PODMAN_SERVICE}-${PODMAN_STAGE}-typo3-manager:latest
+    image: ${PODMAN_NAMESPACE}-${PODMAN_SERVICE}-${PODMAN_STAGE}-typo3-phpfpm:latest
     pull_policy: never
     networks:
       - backend
     user: "${PODMAN_USER_UID}:${PODMAN_GROUP_GID}"
     userns_mode: "keep-id"
     command: [ "sh", "/etc/entrypoint.sh" ]
-    build:
-      context: {{ printf "%q" .ProjectDir }}
-      dockerfile: compose/typo3-manager/typo3-manager
-      args:
-        PODMAN_TYPO3PHPFPM_IMAGE: ${PODMAN_TYPO3PHPFPM_IMAGE}
-        PODMAN_TYPO3_DATA_DIR_CONTAINER: ${PODMAN_TYPO3_DATA_DIR_CONTAINER}
     volumes:
       # private
       - ${PODMAN_TYPO3MANAGER_CRON_ROOT_FILE_HOST}:${PODMAN_TYPO3MANAGER_CRON_ROOT_FILE_CONTAINER}:ro,Z

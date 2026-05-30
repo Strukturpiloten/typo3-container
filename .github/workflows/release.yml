@@ -1,26 +1,19 @@
-name: Publish images
+name: Release
 
 on:
-    push:
-        branches:
-            - main
-        paths:
-            - ".env.tmpl"
-            - ".github/workflows/publish-images.yml"
-            - ".github/workflows/release.yml"
-            - "compose/**"
-            - "configs/**"
-            - "deps/container-utilities/**"
-    schedule:
-        - cron: "47 3 * * *"
     workflow_dispatch:
+        inputs:
+            version:
+                description: SemVer version without leading v, for example 1.2.3
+                required: true
+                type: string
 
 concurrency:
-    group: publish-images-${{ github.ref }}
-    cancel-in-progress: true
+    group: release-${{ inputs.version }}
+    cancel-in-progress: false
 
 permissions:
-    contents: read
+    contents: write
     id-token: write
     packages: write
 
@@ -29,12 +22,53 @@ env:
     OCI_VENDOR: Strukturpiloten
 
 jobs:
-    publish-images:
+    release:
         runs-on: ubuntu-latest
-
         steps:
             - name: Check out repository
               uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+            - name: Validate release version
+              id: version
+              shell: bash
+              env:
+                  DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+                  INPUT_VERSION: ${{ inputs.version }}
+              run: |
+                  set -euo pipefail
+
+                  if [ "${GITHUB_REF_NAME}" != "${DEFAULT_BRANCH}" ]; then
+                    echo "Releases must be started from the default branch ${DEFAULT_BRANCH}." >&2
+                    exit 1
+                  fi
+
+                  version="${INPUT_VERSION}"
+
+                  if ! printf '%s' "${version}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+                    echo "Version must match SemVer major.minor.patch without a leading v." >&2
+                    exit 1
+                  fi
+
+                  major="${version%%.*}"
+                  rest="${version#*.}"
+                  minor="${rest%%.*}"
+
+                  echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+                  echo "version=${version}" >> "$GITHUB_OUTPUT"
+                  echo "major=${major}" >> "$GITHUB_OUTPUT"
+                  echo "major_minor=${major}.${minor}" >> "$GITHUB_OUTPUT"
+
+            - name: Ensure release does not already exist
+              shell: bash
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -euo pipefail
+
+                  if gh release view "${{ steps.version.outputs.tag }}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+                    echo "Release ${{ steps.version.outputs.tag }} already exists." >&2
+                    exit 1
+                  fi
 
             - name: Prepare image coordinates
               id: prep
@@ -65,8 +99,11 @@ jobs:
               with:
                   images: ${{ steps.prep.outputs.image }}
                   tags: |
-                      type=raw,value=latest,enable={{is_default_branch}}
-                      type=ref,event=branch
+                      type=raw,value=latest
+                      type=raw,value=${{ steps.version.outputs.tag }}
+                      type=raw,value=${{ steps.version.outputs.version }}
+                      type=raw,value=${{ steps.version.outputs.major_minor }}
+                      type=raw,value=${{ steps.version.outputs.major }}
                       type=sha,prefix=sha-
 
             - name: Set up QEMU
@@ -91,7 +128,7 @@ jobs:
                   platforms: linux/amd64,linux/arm64
                   push: true
                   pull: true
-                  no-cache: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+                  no-cache: true
                   sbom: true
                   provenance: mode=max
                   tags: ${{ steps.meta.outputs.tags }}
@@ -111,7 +148,7 @@ jobs:
                       OCI_TITLE=TYPO3 PHP-FPM
                       OCI_URL=${{ github.server_url }}/${{ github.repository }}
                       OCI_VENDOR=${{ env.OCI_VENDOR }}
-                      OCI_VERSION=${{ steps.meta.outputs.version }}
+                      OCI_VERSION=${{ steps.version.outputs.version }}
                   outputs: type=image,name=${{ steps.prep.outputs.image }},annotation-index.org.opencontainers.image.description=TYPO3 PHP-FPM runtime image with TYPO3 extensions and container utilities
 
             - name: Install Cosign
@@ -129,3 +166,16 @@ jobs:
                   set -euo pipefail
 
                   cosign sign --yes --recursive "${IMAGE}@${DIGEST}"
+
+            - name: Create GitHub release
+              shell: bash
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -euo pipefail
+
+                  gh release create "${{ steps.version.outputs.tag }}" \
+                    --repo "${GITHUB_REPOSITORY}" \
+                    --target "${GITHUB_SHA}" \
+                    --generate-notes \
+                    --title "${{ steps.version.outputs.tag }}"

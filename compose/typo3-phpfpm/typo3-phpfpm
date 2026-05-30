@@ -13,6 +13,7 @@ ARG OCI_TITLE="TYPO3 PHP-FPM"
 ARG OCI_URL="https://github.com/Strukturpiloten/typo3-container"
 ARG OCI_VENDOR="Strukturpiloten"
 ARG OCI_VERSION=""
+ARG INSTALL_PHP_EXTENSIONS_VERSION=2.11.1
 
 LABEL org.opencontainers.image.base.digest="${OCI_BASE_DIGEST}" \
     org.opencontainers.image.base.name="${OCI_BASE_NAME}" \
@@ -27,7 +28,7 @@ LABEL org.opencontainers.image.base.digest="${OCI_BASE_DIGEST}" \
     org.opencontainers.image.vendor="${OCI_VENDOR}" \
     org.opencontainers.image.version="${OCI_VERSION}"
 
-ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
+ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/download/${INSTALL_PHP_EXTENSIONS_VERSION}/install-php-extensions /usr/local/bin/
 
 RUN apk update && \
     apk upgrade && \
