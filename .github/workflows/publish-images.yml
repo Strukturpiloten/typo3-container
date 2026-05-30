@@ -23,6 +23,7 @@ concurrency:
 
 permissions:
   attestations: write
+  artifact-metadata: write
   contents: read
   id-token: write
   packages: write
@@ -319,14 +320,14 @@ jobs:
           cosign sign --yes --recursive "${IMAGE}@${INDEX_DIGEST}"
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-digest: ${{ steps.digests.outputs.index_digest }}
           subject-name: ${{ steps.prep.outputs.image }}
           push-to-registry: true
 
       - name: Attest amd64 SBOM
-        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-digest: ${{ steps.digests.outputs.amd64_digest }}
           subject-name: ${{ steps.prep.outputs.image }}
@@ -334,7 +335,7 @@ jobs:
           push-to-registry: true
 
       - name: Attest arm64 SBOM
-        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-digest: ${{ steps.digests.outputs.arm64_digest }}
           subject-name: ${{ steps.prep.outputs.image }}
