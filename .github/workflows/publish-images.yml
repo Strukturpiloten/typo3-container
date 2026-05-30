@@ -333,6 +333,7 @@ jobs:
           subject-name: ${{ steps.prep.outputs.image }}
           sbom-path: sbom-amd64.spdx.json
           push-to-registry: true
+          create-storage-record: false
 
       - name: Attest arm64 SBOM
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
@@ -341,3 +342,4 @@ jobs:
           subject-name: ${{ steps.prep.outputs.image }}
           sbom-path: sbom-arm64.spdx.json
           push-to-registry: true
+          create-storage-record: false
