@@ -1,137 +1,342 @@
 name: Publish images
 
 on:
-    push:
-        branches:
-            - main
-        paths:
-            - ".env.tmpl"
-            - ".gitmodules"
-            - ".github/workflows/publish-images.yml"
-            - ".github/workflows/release.yml"
-            - "compose/**"
-            - "configs/**"
-            - "deps/container-utilities"
-            - "deps/container-utilities/**"
-    schedule:
-        - cron: "47 3 * * *"
-    workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".env.tmpl"
+      - ".gitmodules"
+      - ".github/workflows/publish-images.yml"
+      - ".github/workflows/release.yml"
+      - "compose/**"
+      - "configs/**"
+      - "deps/container-utilities"
+      - "deps/container-utilities/**"
+  schedule:
+    - cron: "47 3 * * *"
+  workflow_dispatch:
 
 concurrency:
-    group: publish-images-${{ github.ref }}
-    cancel-in-progress: true
+  group: publish-images-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
-    contents: read
-    id-token: write
-    packages: write
+  attestations: write
+  contents: read
+  id-token: write
+  packages: write
 
 env:
-    OCI_LICENSES: AGPL-3.0-only
-    OCI_VENDOR: Strukturpiloten
+  OCI_DESCRIPTION: TYPO3 PHP-FPM runtime image with TYPO3 extensions and container utilities
+  OCI_LICENSES: AGPL-3.0-only
+  OCI_TITLE: TYPO3 PHP-FPM
+  OCI_VENDOR: Strukturpiloten
+  SYFT_VERSION: v1.44.0
 
 jobs:
-    publish-images:
-        runs-on: ubuntu-latest
+  build-arch-image:
+    name: Build ${{ matrix.arch }} image
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
 
-        steps:
-            - name: Check out repository
-              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-              with:
-                  submodules: recursive
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: recursive
 
-            - name: Prepare image coordinates
-              id: prep
-              shell: bash
-              run: |
-                  set -euo pipefail
+      - name: Install OCI tooling
+        shell: bash
+        run: |
+          set -euo pipefail
 
-                  owner=$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
-                  base_image=$(grep '^PODMAN_TYPO3PHPFPM_IMAGE=' .env.tmpl | cut -d= -f2-)
-                  typo3_data_dir=$(grep '^PODMAN_TYPO3_DATA_DIR_CONTAINER=' .env.tmpl | cut -d= -f2-)
-                  base_name="${base_image%@*}"
-                  base_digest=""
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends buildah podman skopeo
 
-                  if [ "${base_name}" != "${base_image}" ]; then
-                    base_digest="${base_image#*@}"
-                  fi
+      - name: Prepare image coordinates
+        id: prep
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
 
-                  echo "image=ghcr.io/${owner}/typo3-phpfpm" >> "$GITHUB_OUTPUT"
-                  echo "base_image=${base_image}" >> "$GITHUB_OUTPUT"
-                  echo "typo3_data_dir=${typo3_data_dir}" >> "$GITHUB_OUTPUT"
-                  echo "base_name=${base_name}" >> "$GITHUB_OUTPUT"
-                  echo "base_digest=${base_digest}" >> "$GITHUB_OUTPUT"
-                  echo "created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+          owner=$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          base_image=$(grep '^PODMAN_TYPO3PHPFPM_IMAGE=' .env.tmpl | cut -d= -f2-)
+          typo3_data_dir=$(grep '^PODMAN_TYPO3_DATA_DIR_CONTAINER=' .env.tmpl | cut -d= -f2-)
+          base_name="${base_image%@*}"
+          base_digest=""
+          artifact_name="typo3-phpfpm-${ARCH}-oci-archive"
+          archive_path="${RUNNER_TEMP}/typo3-phpfpm-${ARCH}.tar"
+          local_image="localhost/typo3-phpfpm:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${ARCH}"
 
-            - name: Extract Docker metadata
-              id: meta
-              uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
-              with:
-                  images: ${{ steps.prep.outputs.image }}
-                  tags: |
-                      type=raw,value=latest,enable={{is_default_branch}}
-                      type=ref,event=branch
-                      type=sha,prefix=sha-
+          if [ "${base_name}" != "${base_image}" ]; then
+            base_digest="${base_image#*@}"
+          fi
 
-            - name: Set up QEMU
-              uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
-              with:
-                  cache-image: false
+          echo "archive_path=${archive_path}" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=${artifact_name}" >> "$GITHUB_OUTPUT"
+          echo "base_image=${base_image}" >> "$GITHUB_OUTPUT"
+          echo "base_name=${base_name}" >> "$GITHUB_OUTPUT"
+          echo "base_digest=${base_digest}" >> "$GITHUB_OUTPUT"
+          echo "created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${owner}/typo3-phpfpm" >> "$GITHUB_OUTPUT"
+          echo "local_image=${local_image}" >> "$GITHUB_OUTPUT"
+          echo "typo3_data_dir=${typo3_data_dir}" >> "$GITHUB_OUTPUT"
+          echo "version=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+      - name: Build and export architecture image
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+          ARCHIVE_PATH: ${{ steps.prep.outputs.archive_path }}
+          BASE_DIGEST: ${{ steps.prep.outputs.base_digest }}
+          BASE_IMAGE: ${{ steps.prep.outputs.base_image }}
+          BASE_NAME: ${{ steps.prep.outputs.base_name }}
+          CREATED: ${{ steps.prep.outputs.created }}
+          LOCAL_IMAGE: ${{ steps.prep.outputs.local_image }}
+          TYPO3_DATA_DIR: ${{ steps.prep.outputs.typo3_data_dir }}
+          VERSION: ${{ steps.prep.outputs.version }}
+        run: |
+          set -euo pipefail
 
-            - name: Log in to GitHub Container Registry
-              uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
-              with:
-                  registry: ghcr.io
-                  username: ${{ github.actor }}
-                  password: ${{ secrets.GITHUB_TOKEN }}
+          no_cache_args=()
 
-            - name: Build and push multi-arch image
-              id: build
-              uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
-              with:
-                  context: .
-                  file: compose/typo3-phpfpm/typo3-phpfpm
-                  platforms: linux/amd64,linux/arm64
-                  push: true
-                  pull: true
-                  no-cache: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-                  sbom: true
-                  provenance: mode=max
-                  tags: ${{ steps.meta.outputs.tags }}
-                  cache-from: type=gha
-                  cache-to: type=gha,mode=max
-                  build-args: |
-                      PODMAN_TYPO3PHPFPM_IMAGE=${{ steps.prep.outputs.base_image }}
-                      PODMAN_TYPO3_DATA_DIR_CONTAINER=${{ steps.prep.outputs.typo3_data_dir }}
-                      OCI_BASE_DIGEST=${{ steps.prep.outputs.base_digest }}
-                      OCI_BASE_NAME=${{ steps.prep.outputs.base_name }}
-                      OCI_CREATED=${{ steps.prep.outputs.created }}
-                      OCI_DESCRIPTION=TYPO3 PHP-FPM runtime image with TYPO3 extensions and container utilities
-                      OCI_DOCUMENTATION=${{ github.server_url }}/${{ github.repository }}
-                      OCI_LICENSES=${{ env.OCI_LICENSES }}
-                      OCI_REVISION=${{ github.sha }}
-                      OCI_SOURCE=${{ github.server_url }}/${{ github.repository }}
-                      OCI_TITLE=TYPO3 PHP-FPM
-                      OCI_URL=${{ github.server_url }}/${{ github.repository }}
-                      OCI_VENDOR=${{ env.OCI_VENDOR }}
-                      OCI_VERSION=${{ steps.meta.outputs.version }}
-                  outputs: type=image,name=${{ steps.prep.outputs.image }},annotation-index.org.opencontainers.image.description=TYPO3 PHP-FPM runtime image with TYPO3 extensions and container utilities
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ] || [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            no_cache_args+=(--no-cache)
+          fi
 
-            - name: Install Cosign
-              uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-              with:
-                  cosign-release: v3.0.6
+          sudo buildah bud \
+            --arch "${ARCH}" \
+            --format oci \
+            --pull-always \
+            "${no_cache_args[@]}" \
+            --build-arg "PODMAN_TYPO3PHPFPM_IMAGE=${BASE_IMAGE}" \
+            --build-arg "PODMAN_TYPO3_DATA_DIR_CONTAINER=${TYPO3_DATA_DIR}" \
+            --build-arg "OCI_BASE_DIGEST=${BASE_DIGEST}" \
+            --build-arg "OCI_BASE_NAME=${BASE_NAME}" \
+            --build-arg "OCI_CREATED=${CREATED}" \
+            --build-arg "OCI_DESCRIPTION=${OCI_DESCRIPTION}" \
+            --build-arg "OCI_DOCUMENTATION=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --build-arg "OCI_LICENSES=${OCI_LICENSES}" \
+            --build-arg "OCI_REVISION=${GITHUB_SHA}" \
+            --build-arg "OCI_SOURCE=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --build-arg "OCI_TITLE=${OCI_TITLE}" \
+            --build-arg "OCI_URL=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --build-arg "OCI_VENDOR=${OCI_VENDOR}" \
+            --build-arg "OCI_VERSION=${VERSION}" \
+            --tag "${LOCAL_IMAGE}" \
+            --file compose/typo3-phpfpm/typo3-phpfpm \
+            .
 
-            - name: Sign image with Cosign
-              if: ${{ steps.build.outputs.digest != '' }}
-              shell: bash
-              env:
-                  IMAGE: ${{ steps.prep.outputs.image }}
-                  DIGEST: ${{ steps.build.outputs.digest }}
-              run: |
-                  set -euo pipefail
+          sudo buildah push --format oci "${LOCAL_IMAGE}" "oci-archive:${ARCHIVE_PATH}"
 
-                  cosign sign --yes --recursive "${IMAGE}@${DIGEST}"
+      - name: Upload architecture image archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.prep.outputs.artifact_name }}
+          path: ${{ steps.prep.outputs.archive_path }}
+          if-no-files-found: error
+
+  publish-manifest:
+    name: Publish multi-arch manifest
+    needs: build-arch-image
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Install OCI tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends jq podman skopeo
+
+      - name: Download amd64 image archive
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: typo3-phpfpm-amd64-oci-archive
+          path: ${{ runner.temp }}/oci-archives/amd64
+
+      - name: Download arm64 image archive
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: typo3-phpfpm-arm64-oci-archive
+          path: ${{ runner.temp }}/oci-archives/arm64
+
+      - name: Prepare publish tags
+        id: prep
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          owner=$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          image="ghcr.io/${owner}/typo3-phpfpm"
+          ref_tag=$(printf '%s' "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//')
+          sha_tag="sha-${GITHUB_SHA}"
+
+          tags=("${sha_tag}")
+
+          if [ -n "${ref_tag}" ]; then
+            tags+=("${ref_tag}")
+          fi
+
+          if [ "${GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}" ]; then
+            tags+=("latest")
+          fi
+
+          unique_tags=()
+          for tag in "${tags[@]}"; do
+            skip=0
+            for existing in "${unique_tags[@]}"; do
+              if [ "${existing}" = "${tag}" ]; then
+                skip=1
+                break
+              fi
+            done
+            if [ "${skip}" -eq 0 ]; then
+              unique_tags+=("${tag}")
+            fi
+          done
+
+          {
+            echo "image=${image}"
+            echo "sign_tag=${sha_tag}"
+            echo "tags<<EOF"
+            printf '%s\n' "${unique_tags[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          printf '%s' "${GITHUB_TOKEN}" | sudo podman login --username "${GITHUB_ACTOR}" --password-stdin ghcr.io
+
+      - name: Create and push multi-arch manifest
+        shell: bash
+        env:
+          AMD64_ARCHIVE: ${{ runner.temp }}/oci-archives/amd64/typo3-phpfpm-amd64.tar
+          ARM64_ARCHIVE: ${{ runner.temp }}/oci-archives/arm64/typo3-phpfpm-arm64.tar
+          IMAGE: ${{ steps.prep.outputs.image }}
+          TAGS: ${{ steps.prep.outputs.tags }}
+        run: |
+          set -euo pipefail
+
+          manifest_name="typo3-phpfpm-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          local_image_amd64="localhost/typo3-phpfpm:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-amd64"
+          local_image_arm64="localhost/typo3-phpfpm:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-arm64"
+          trap 'sudo podman manifest rm "${manifest_name}" >/dev/null 2>&1 || true' EXIT
+
+          sudo skopeo copy "oci-archive:${AMD64_ARCHIVE}" "containers-storage:${local_image_amd64}"
+          sudo skopeo copy "oci-archive:${ARM64_ARCHIVE}" "containers-storage:${local_image_arm64}"
+
+          sudo podman manifest create "${manifest_name}"
+          sudo podman manifest add --arch amd64 "${manifest_name}" "${local_image_amd64}"
+          sudo podman manifest add --arch arm64 "${manifest_name}" "${local_image_arm64}"
+
+          while IFS= read -r tag; do
+            [ -n "${tag}" ] || continue
+            sudo podman manifest push --all --format oci "${manifest_name}" "docker://${IMAGE}:${tag}"
+          done <<< "${TAGS}"
+
+      - name: Resolve image digests
+        id: digests
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ steps.prep.outputs.image }}
+          SIGN_TAG: ${{ steps.prep.outputs.sign_tag }}
+        run: |
+          set -euo pipefail
+
+          raw_manifest="${RUNNER_TEMP}/typo3-phpfpm-index.json"
+          sudo skopeo inspect --raw --creds "${GITHUB_ACTOR}:${GITHUB_TOKEN}" "docker://${IMAGE}:${SIGN_TAG}" > "${raw_manifest}"
+
+          amd64_digest=$(jq -r '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest' "${raw_manifest}")
+          arm64_digest=$(jq -r '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "arm64") | .digest' "${raw_manifest}")
+          index_digest=$(sudo skopeo inspect --creds "${GITHUB_ACTOR}:${GITHUB_TOKEN}" --format '{{.Digest}}' "docker://${IMAGE}:${SIGN_TAG}")
+
+          test -n "${amd64_digest}" && test "${amd64_digest}" != "null"
+          test -n "${arm64_digest}" && test "${arm64_digest}" != "null"
+
+          {
+            echo "amd64_digest=${amd64_digest}"
+            echo "arm64_digest=${arm64_digest}"
+            echo "index_digest=${index_digest}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install Syft
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          archive="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
+          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/${archive}" -o "${archive}"
+          tar -xzf "${archive}" syft
+          sudo install -m 0755 syft /usr/local/bin/syft
+
+      - name: Generate SBOMs
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AMD64_DIGEST: ${{ steps.digests.outputs.amd64_digest }}
+          ARM64_DIGEST: ${{ steps.digests.outputs.arm64_digest }}
+          IMAGE: ${{ steps.prep.outputs.image }}
+        run: |
+          set -euo pipefail
+
+          printf '%s' "${GITHUB_TOKEN}" | syft login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+          syft scan --from registry "${IMAGE}@${AMD64_DIGEST}" -o spdx-json=sbom-amd64.spdx.json
+          syft scan --from registry "${IMAGE}@${ARM64_DIGEST}" -o spdx-json=sbom-arm64.spdx.json
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.0.6
+
+      - name: Sign image with Cosign
+        shell: bash
+        env:
+          IMAGE: ${{ steps.prep.outputs.image }}
+          INDEX_DIGEST: ${{ steps.digests.outputs.index_digest }}
+        run: |
+          set -euo pipefail
+
+          cosign sign --yes --recursive "${IMAGE}@${INDEX_DIGEST}"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-digest: ${{ steps.digests.outputs.index_digest }}
+          subject-name: ${{ steps.prep.outputs.image }}
+          push-to-registry: true
+
+      - name: Attest amd64 SBOM
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-digest: ${{ steps.digests.outputs.amd64_digest }}
+          subject-name: ${{ steps.prep.outputs.image }}
+          sbom-path: sbom-amd64.spdx.json
+          push-to-registry: true
+
+      - name: Attest arm64 SBOM
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-digest: ${{ steps.digests.outputs.arm64_digest }}
+          subject-name: ${{ steps.prep.outputs.image }}
+          sbom-path: sbom-arm64.spdx.json
+          push-to-registry: true
