@@ -7,12 +7,12 @@
     "customManagers": [
         {
             "customType": "regex",
-            "description": "Track pinned container image tags and digests in .env.tmpl",
+            "description": "Track external pinned container image tags and digests in .env.tmpl",
             "managerFilePatterns": [
                 "/(^|\\/)\\.env\\.tmpl$/"
             ],
             "matchStrings": [
-                "PODMAN_[A-Z0-9_]+IMAGE=(?<depName>[^:@\\s]+(?:\\/[^:@\\s]+)*):(?<currentValue>[^@\\s]+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?"
+                "PODMAN_(?:MARIADB|POSTGRES|NGINX|TYPO3PHPFPM_BASE)_IMAGE=(?<depName>[^:@\\s]+(?:\\/[^:@\\s]+)*):(?<currentValue>[^@\\s]+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?"
             ],
             "datasourceTemplate": "docker"
         },
