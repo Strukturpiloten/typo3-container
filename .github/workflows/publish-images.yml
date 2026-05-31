@@ -9,6 +9,7 @@ on:
       - ".gitmodules"
       - ".github/workflows/publish-images.yml"
       - ".github/workflows/release.yml"
+      - "compose.yaml.tmpl"
       - "compose/**"
       - "configs/**"
       - "deps/container-utilities"
@@ -38,6 +39,12 @@ env:
 jobs:
   build-arch-image:
     name: Build ${{ matrix.arch }} image
+    if: >-
+      github.event_name != 'push' ||
+      (
+        !startsWith(github.event.head_commit.message, 'chore(release): v') &&
+        !contains(github.event.head_commit.message, 'release/v')
+      )
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -71,7 +78,7 @@ jobs:
           set -euo pipefail
 
           owner=$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
-          base_image=$(grep '^PODMAN_TYPO3PHPFPM_IMAGE=' .env.tmpl | cut -d= -f2-)
+          base_image=$(grep '^PODMAN_TYPO3PHPFPM_BASE_IMAGE=' .env.tmpl | cut -d= -f2-)
           typo3_data_dir=$(grep '^PODMAN_TYPO3_DATA_DIR_CONTAINER=' .env.tmpl | cut -d= -f2-)
           base_name="${base_image%@*}"
           base_digest=""
@@ -120,7 +127,7 @@ jobs:
             --format oci \
             --pull-always \
             "${no_cache_args[@]}" \
-            --build-arg "PODMAN_TYPO3PHPFPM_IMAGE=${BASE_IMAGE}" \
+            --build-arg "PODMAN_TYPO3PHPFPM_BASE_IMAGE=${BASE_IMAGE}" \
             --build-arg "PODMAN_TYPO3_DATA_DIR_CONTAINER=${TYPO3_DATA_DIR}" \
             --build-arg "OCI_BASE_DIGEST=${BASE_DIGEST}" \
             --build-arg "OCI_BASE_NAME=${BASE_NAME}" \

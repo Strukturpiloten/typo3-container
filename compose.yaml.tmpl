@@ -14,7 +14,8 @@ networks:
 services:
   typo3-phpfpm:
     hostname: typo3-phpfpm
-    image: ${PODMAN_NAMESPACE}-${PODMAN_SERVICE}-${PODMAN_STAGE}-typo3-phpfpm:latest
+    image: ${PODMAN_TYPO3PHPFPM_IMAGE}
+    pull_policy: ${PODMAN_TYPO3PHPFPM_PULL_POLICY}
     restart: unless-stopped
     networks:
       - backend
@@ -38,18 +39,20 @@ services:
       - DATABASE_SQL_PASSWORD=${DATABASE_SQL_PASSWORD}
       # Typo3
       - TYPO3_VERSION=${TYPO3_VERSION}
-    build:
-      context: {{ printf "%q" .ProjectDir }}
-      dockerfile: compose/typo3-phpfpm/typo3-phpfpm
-      args:
-        PODMAN_TYPO3PHPFPM_IMAGE: ${PODMAN_TYPO3PHPFPM_IMAGE}
-        PODMAN_TYPO3_DATA_DIR_CONTAINER: ${PODMAN_TYPO3_DATA_DIR_CONTAINER}
     # healthcheck:
       #   test: php -f "${PODMAN_TYPO3PHPFPM_HEALTHCHECK_FILE_CONTAINER}" || exit 1
     #   start_period: 10s
     #   interval: 10s
     #   timeout: 5s
     #   retries: 4
+{{- if not .UsePrebuiltTYPO3PHPFPMImage }}
+    build:
+      context: {{ printf "%q" .ProjectDir }}
+      dockerfile: compose/typo3-phpfpm/typo3-phpfpm
+      args:
+        PODMAN_TYPO3PHPFPM_BASE_IMAGE: ${PODMAN_TYPO3PHPFPM_BASE_IMAGE}
+        PODMAN_TYPO3_DATA_DIR_CONTAINER: ${PODMAN_TYPO3_DATA_DIR_CONTAINER}
+{{- end }}
     depends_on:
       {{ .DatabaseSQLService }}:
         condition: service_healthy
@@ -61,8 +64,8 @@ services:
   typo3-installer:
     hostname: typo3-installer
     restart: "no"
-    image: ${PODMAN_NAMESPACE}-${PODMAN_SERVICE}-${PODMAN_STAGE}-typo3-phpfpm:latest
-    pull_policy: never
+    image: ${PODMAN_TYPO3PHPFPM_IMAGE}
+    pull_policy: ${PODMAN_TYPO3PHPFPM_PULL_POLICY}
     networks:
       - backend
     user: "${PODMAN_USER_UID}:${PODMAN_GROUP_GID}"
@@ -112,8 +115,8 @@ services:
   typo3-manager:
     hostname: typo3-manager
     restart: unless-stopped
-    image: ${PODMAN_NAMESPACE}-${PODMAN_SERVICE}-${PODMAN_STAGE}-typo3-phpfpm:latest
-    pull_policy: never
+    image: ${PODMAN_TYPO3PHPFPM_IMAGE}
+    pull_policy: ${PODMAN_TYPO3PHPFPM_PULL_POLICY}
     networks:
       - backend
     user: "${PODMAN_USER_UID}:${PODMAN_GROUP_GID}"
