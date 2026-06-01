@@ -4,6 +4,10 @@
         "config:recommended",
         "helpers:pinGitHubActionDigests"
     ],
+    "baseBranchPatterns": [
+        "$default",
+        "v1.0"
+    ],
     "customManagers": [
         {
             "customType": "regex",
