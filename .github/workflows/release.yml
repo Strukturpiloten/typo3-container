@@ -7,6 +7,16 @@ on:
         description: SemVer version with optional leading v and prerelease, for example 1.2.3 or v1.2.3-rc.1
         required: true
         type: string
+      renovate_major_release_count:
+        description: How many major release streams Renovate should keep updating, for example 0 keeps only the default branch and 1 keeps only the current major.
+        default: "1"
+        required: true
+        type: string
+      renovate_minor_release_count:
+        description: How many minor release branches per tracked major Renovate should keep updating, for example 0 keeps only the default branch and 1 keeps only the latest minor.
+        default: "1"
+        required: true
+        type: string
 
 concurrency:
   group: release-${{ inputs.version }}
@@ -39,6 +49,8 @@ jobs:
       major: ${{ steps.version.outputs.major }}
       major_minor: ${{ steps.version.outputs.major_minor }}
       prerelease: ${{ steps.version.outputs.prerelease }}
+      renovate_major_count: ${{ steps.version.outputs.renovate_major_count }}
+      renovate_minor_count: ${{ steps.version.outputs.renovate_minor_count }}
       release_branch: ${{ steps.version.outputs.release_branch }}
       release_branch_exists: ${{ steps.version.outputs.release_branch_exists }}
       tag: ${{ steps.version.outputs.tag }}
@@ -56,15 +68,26 @@ jobs:
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           INPUT_VERSION: ${{ inputs.version }}
+          INPUT_RENOVATE_MAJOR_RELEASE_COUNT: ${{ inputs.renovate_major_release_count }}
+          INPUT_RENOVATE_MINOR_RELEASE_COUNT: ${{ inputs.renovate_minor_release_count }}
         run: |
           set -euo pipefail
 
           version="${INPUT_VERSION#v}"
+          renovate_major_count="${INPUT_RENOVATE_MAJOR_RELEASE_COUNT}"
+          renovate_minor_count="${INPUT_RENOVATE_MINOR_RELEASE_COUNT}"
 
           if ! printf '%s' "${version}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'; then
             echo "Version must match SemVer major.minor.patch with an optional prerelease, with or without a leading v." >&2
             exit 1
           fi
+
+          for value_name in renovate_major_count renovate_minor_count; do
+            if ! printf '%s' "${!value_name}" | grep -Eq '^(0|[1-9][0-9]*)$'; then
+              echo "${value_name} must be a non-negative integer." >&2
+              exit 1
+            fi
+          done
 
           stable_version="${version%%-*}"
           major="${stable_version%%.*}"
@@ -107,6 +130,8 @@ jobs:
             echo "major=${major}"
             echo "major_minor=${major_minor}"
             echo "prerelease=${prerelease}"
+            echo "renovate_major_count=${renovate_major_count}"
+            echo "renovate_minor_count=${renovate_minor_count}"
             echo "release_branch=${release_branch}"
             echo "release_branch_exists=${release_branch_exists}"
             echo "tag=${tag}"
@@ -228,7 +253,7 @@ jobs:
 
           git add .env.tmpl
           if git diff --cached --quiet; then
-            echo ".env.tmpl already references ${release_image}." >&2
+            echo ".env.tmpl already matches the requested release state." >&2
             exit 1
           fi
 
@@ -237,6 +262,159 @@ jobs:
           git push origin "HEAD:${branch}"
 
           echo "release_source_sha=${release_source_sha}" >> "$GITHUB_OUTPUT"
+
+  update-renovate-config:
+    name: Update Renovate branch targets
+    needs:
+      - prepare-release
+      - prepare-release-source
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out default branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Open Renovate config pull request
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: ${{ needs.prepare-release.outputs.release_branch }}
+          RENOVATE_MAJOR_RELEASE_COUNT: ${{ needs.prepare-release.outputs.renovate_major_count }}
+          RENOVATE_MINOR_RELEASE_COUNT: ${{ needs.prepare-release.outputs.renovate_minor_count }}
+        run: |
+          set -euo pipefail
+
+          branch="chore/release-renovate-${RELEASE_BRANCH}"
+          title="chore(renovate): track ${RELEASE_BRANCH}"
+          base_branches_file="${RUNNER_TEMP}/renovate-base-branches.txt"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "+refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
+
+          if git ls-remote --exit-code --heads origin "${branch}" >/dev/null 2>&1; then
+            git fetch origin "+refs/heads/${branch}:refs/remotes/origin/${branch}"
+          fi
+
+          git switch -C "${branch}" "refs/remotes/origin/${DEFAULT_BRANCH}"
+
+          BASE_BRANCHES_FILE="${base_branches_file}" python3 <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+
+          config_path = ".github/renovate.json"
+          release_branch = os.environ["RELEASE_BRANCH"]
+          major_limit = int(os.environ["RENOVATE_MAJOR_RELEASE_COUNT"])
+          minor_limit = int(os.environ["RENOVATE_MINOR_RELEASE_COUNT"])
+          base_branches_file = os.environ["BASE_BRANCHES_FILE"]
+          ref_pattern = re.compile(r"refs/heads/(v(?P<major>\d+)\.(?P<minor>\d+))$")
+
+          result = subprocess.run(
+            ["git", "ls-remote", "--heads", "origin", "v*"],
+            check=True,
+            capture_output=True,
+            text=True,
+          )
+
+          release_branches = {}
+          for raw_line in result.stdout.splitlines():
+            parts = raw_line.split()
+            if len(parts) != 2:
+              continue
+
+            _, ref = parts
+            match = ref_pattern.fullmatch(ref)
+            if match is None:
+              continue
+
+            release_branches[match.group(1)] = (
+              int(match.group("major")),
+              int(match.group("minor")),
+            )
+
+          current_match = re.fullmatch(r"v(?P<major>\d+)\.(?P<minor>\d+)", release_branch)
+          if current_match is None:
+            raise SystemExit(f"Release branch {release_branch} is not v<major>.<minor>.")
+
+          release_branches[release_branch] = (
+            int(current_match.group("major")),
+            int(current_match.group("minor")),
+          )
+
+          selected_branches = []
+          majors = sorted({major for major, _ in release_branches.values()}, reverse=True)
+          for major in majors[:major_limit]:
+            major_branches = sorted(
+              (
+                (minor, name)
+                for name, (branch_major, minor) in release_branches.items()
+                if branch_major == major
+              ),
+              reverse=True,
+            )
+            selected_branches.extend(name for _, name in major_branches[:minor_limit])
+
+          configured_base_branches = ["$default", *selected_branches]
+
+          with open(config_path, "r", encoding="utf-8") as handle:
+            renovate_config = json.load(handle)
+
+          if renovate_config.get("baseBranchPatterns") != configured_base_branches:
+            renovate_config["baseBranchPatterns"] = configured_base_branches
+            with open(config_path, "w", encoding="utf-8") as handle:
+              json.dump(renovate_config, handle, indent=4)
+              handle.write("\n")
+
+          with open(base_branches_file, "w", encoding="utf-8") as handle:
+            handle.write("\n".join(configured_base_branches))
+            handle.write("\n")
+
+          print("Configured Renovate base branches:", ", ".join(configured_base_branches))
+          PY
+
+          git add .github/renovate.json
+          if git diff --cached --quiet; then
+            echo ".github/renovate.json already tracks the requested release branches."
+            exit 0
+          fi
+
+          git commit -m "${title}"
+          git push --force-with-lease origin "HEAD:${branch}"
+
+          existing_pr_number=$(gh pr list \
+            --repo "${GITHUB_REPOSITORY}" \
+            --state open \
+            --base "${DEFAULT_BRANCH}" \
+            --head "${GITHUB_REPOSITORY_OWNER}:${branch}" \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "${existing_pr_number}" ]; then
+            echo "Renovate config PR #${existing_pr_number} already exists."
+            exit 0
+          fi
+
+          body_file="${RUNNER_TEMP}/renovate-config-pr.md"
+          {
+            printf '%s\n\n' 'Renovate reads repository configuration from the default branch, so release-branch tracking has to be updated there separately.'
+            printf '%s\n' 'Tracked base branches:'
+            while IFS= read -r tracked_branch; do
+              printf -- '- %s\n' "${tracked_branch}"
+            done < "${base_branches_file}"
+          } > "${body_file}"
+
+          gh pr create \
+            --repo "${GITHUB_REPOSITORY}" \
+            --base "${DEFAULT_BRANCH}" \
+            --head "${GITHUB_REPOSITORY_OWNER}:${branch}" \
+            --title "${title}" \
+            --body-file "${body_file}"
 
   build-arch-image:
     name: Build ${{ matrix.arch }} release image
