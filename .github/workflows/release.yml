@@ -187,6 +187,14 @@ jobs:
               echo "Start the release workflow again from the current default branch." >&2
               exit 1
             fi
+
+            if git ls-remote --exit-code --heads origin "${RELEASE_BRANCH}" >/dev/null 2>&1; then
+              echo "Release branch ${RELEASE_BRANCH} was created after the release source was selected." >&2
+              echo "Start the release workflow again from the current release branch." >&2
+              exit 1
+            fi
+
+            git push origin "${BASE_SOURCE_SHA}:refs/heads/${RELEASE_BRANCH}"
           fi
 
           if git ls-remote --exit-code --heads origin "${branch}" >/dev/null 2>&1; then
@@ -534,13 +542,11 @@ jobs:
         env:
           BASE_SOURCE_SHA: ${{ needs.prepare-release.outputs.base_source_sha }}
           CANDIDATE_TAG: ${{ steps.prep.outputs.candidate_tag }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GH_TOKEN: ${{ github.token }}
           IMAGE: ${{ steps.prep.outputs.image }}
           INDEX_DIGEST: ${{ steps.digests.outputs.index_digest }}
           PRERELEASE: ${{ needs.prepare-release.outputs.prerelease }}
           RELEASE_BRANCH: ${{ needs.prepare-release.outputs.release_branch }}
-          RELEASE_BRANCH_EXISTS: ${{ needs.prepare-release.outputs.release_branch_exists }}
           RELEASE_SOURCE_SHA: ${{ needs.prepare-release-source.outputs.release_source_sha }}
           TAG: ${{ needs.prepare-release.outputs.tag }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
@@ -559,30 +565,12 @@ jobs:
             exit 1
           fi
 
-          if [ "${RELEASE_BRANCH_EXISTS}" = "true" ]; then
-            git fetch origin "+refs/heads/${RELEASE_BRANCH}:refs/remotes/origin/${RELEASE_BRANCH}"
-            current_release_branch=$(git rev-parse "refs/remotes/origin/${RELEASE_BRANCH}")
-            if [ "${current_release_branch}" != "${BASE_SOURCE_SHA}" ]; then
-              echo "Release branch ${RELEASE_BRANCH} moved after the release image was built." >&2
-              echo "Start the release workflow again from the current release branch." >&2
-              exit 1
-            fi
-          else
-            if git ls-remote --exit-code --heads origin "${RELEASE_BRANCH}" >/dev/null 2>&1; then
-              echo "Release branch ${RELEASE_BRANCH} was created after the release image was built." >&2
-              echo "Start the release workflow again from the current release branch." >&2
-              exit 1
-            fi
-
-            git fetch origin "+refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
-            current_default=$(git rev-parse "refs/remotes/origin/${DEFAULT_BRANCH}")
-            if [ "${current_default}" != "${BASE_SOURCE_SHA}" ]; then
-              echo "Default branch ${DEFAULT_BRANCH} moved after the release image was built." >&2
-              echo "Start the release workflow again from the current default branch." >&2
-              exit 1
-            fi
-
-            git push origin "${BASE_SOURCE_SHA}:refs/heads/${RELEASE_BRANCH}"
+          git fetch origin "+refs/heads/${RELEASE_BRANCH}:refs/remotes/origin/${RELEASE_BRANCH}"
+          current_release_branch=$(git rev-parse "refs/remotes/origin/${RELEASE_BRANCH}")
+          if [ "${current_release_branch}" != "${BASE_SOURCE_SHA}" ]; then
+            echo "Release branch ${RELEASE_BRANCH} moved after the release image was built." >&2
+            echo "Start the release workflow again from the current release branch." >&2
+            exit 1
           fi
 
           release_image_line="${PREBUILT_TYPO3PHPFPM_IMAGE_TEMPLATE_PREFIX}${release_image}${PREBUILT_TYPO3PHPFPM_IMAGE_TEMPLATE_SUFFIX}"
