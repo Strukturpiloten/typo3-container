@@ -1,302 +1,312 @@
 name: Finalize release
 
 on:
-    pull_request:
-        branches:
-            - "v*"
-        paths:
-            - ".env.tmpl"
-            - ".release.env"
-        types:
-            - closed
+  pull_request:
+    branches:
+      - "v*"
+    paths:
+      - ".env.tmpl"
+      - ".release.env"
+    types:
+      - closed
 
 concurrency:
-    group: finalize-release-${{ github.event.pull_request.number }}
-    cancel-in-progress: false
+  group: finalize-release-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 permissions:
-    contents: write
-    packages: write
-    pull-requests: read
+  contents: write
+  packages: write
+  pull-requests: read
 
 env:
-    PREBUILT_TYPO3PHPFPM_IMAGE: ghcr.io/strukturpiloten/typo3-phpfpm
-    PREBUILT_TYPO3PHPFPM_IMAGE_TEMPLATE_PREFIX: "PODMAN_TYPO3PHPFPM_IMAGE={{ if .UsePrebuiltTYPO3PHPFPMImage }}"
-    PREBUILT_TYPO3PHPFPM_IMAGE_TEMPLATE_SUFFIX: "{{ else }}{{ .PodmanNamespace }}-{{ .PodmanService }}-{{ .PodmanStage }}-typo3-phpfpm:latest{{ end }}"
-    RELEASE_METADATA_FILE: .release.env
+  PREBUILT_TYPO3PHPFPM_IMAGE: ghcr.io/strukturpiloten/typo3-phpfpm
+  PREBUILT_TYPO3PHPFPM_IMAGE_TEMPLATE_PREFIX: "PODMAN_TYPO3PHPFPM_IMAGE={{ if .UsePrebuiltTYPO3PHPFPMImage }}"
+  PREBUILT_TYPO3PHPFPM_IMAGE_TEMPLATE_SUFFIX: "{{ else }}{{ .PodmanNamespace }}-{{ .PodmanService }}-{{ .PodmanStage }}-typo3-phpfpm:latest{{ end }}"
+  RELEASE_METADATA_FILE: .release.env
 
 jobs:
-    finalize-release:
-        if: >-
-            github.event.pull_request.merged == true &&
-            startsWith(github.event.pull_request.base.ref, 'v') &&
-            startsWith(github.event.pull_request.head.ref, 'v') &&
-            github.event.pull_request.head.repo.full_name == github.repository
-        runs-on: ubuntu-24.04
-        steps:
-            - name: Check out merged release branch source
-              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-              with:
-                  fetch-depth: 0
-                  ref: ${{ github.event.pull_request.merge_commit_sha }}
+  finalize-release:
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.base.ref, 'v') &&
+      startsWith(github.event.pull_request.head.ref, 'v') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out merged release branch source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
 
-            - name: Install OCI tooling
-              shell: bash
-              run: |
-                  set -euo pipefail
+      - name: Install OCI tooling
+        shell: bash
+        run: |
+          set -euo pipefail
 
-                  sudo apt-get update
-                  sudo apt-get install --yes --no-install-recommends skopeo
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends skopeo
 
-            - name: Prepare release metadata
-              id: prep
-              shell: bash
-              env:
-                  BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
-                  HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
-                  MERGE_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
-              run: |
-                  set -euo pipefail
+      - name: Prepare release metadata
+        id: prep
+        shell: bash
+        env:
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          MERGE_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          set -euo pipefail
 
-                  read_metadata() {
-                    key="${1}"
-                    value=""
+          read_metadata() {
+            key="${1}"
+            value=""
 
-                    while IFS='=' read -r name entry_value; do
-                      if [ "${name}" = "${key}" ]; then
-                        value="${entry_value}"
-                        break
-                      fi
-                    done < "${RELEASE_METADATA_FILE}"
+            while IFS='=' read -r name entry_value; do
+              if [ "${name}" = "${key}" ]; then
+                value="${entry_value}"
+                break
+              fi
+            done < "${RELEASE_METADATA_FILE}"
 
-                    printf '%s' "${value}"
-                  }
+            printf '%s' "${value}"
+          }
 
-                  if [ ! -f "${RELEASE_METADATA_FILE}" ]; then
-                    echo "Missing ${RELEASE_METADATA_FILE}." >&2
-                    exit 1
-                  fi
+          if [ ! -f "${RELEASE_METADATA_FILE}" ]; then
+            echo "Missing ${RELEASE_METADATA_FILE}." >&2
+            exit 1
+          fi
 
-                  tag=$(read_metadata RELEASE_TAG)
-                  version=$(read_metadata RELEASE_VERSION)
-                  release_branch=$(read_metadata RELEASE_BRANCH)
-                  release_base_source_sha=$(read_metadata RELEASE_BASE_SOURCE_SHA)
-                  release_source_sha=$(read_metadata RELEASE_SOURCE_SHA)
-                  image=$(read_metadata RELEASE_IMAGE)
-                  digest=$(read_metadata RELEASE_IMAGE_DIGEST)
-                  image_ref=$(read_metadata RELEASE_IMAGE_REF)
-                  prerelease=$(read_metadata RELEASE_PRERELEASE)
+          tag=$(read_metadata RELEASE_TAG)
+          version=$(read_metadata RELEASE_VERSION)
+          release_branch=$(read_metadata RELEASE_BRANCH)
+          release_base_source_sha=$(read_metadata RELEASE_BASE_SOURCE_SHA)
+          release_source_sha=$(read_metadata RELEASE_SOURCE_SHA)
+          image=$(read_metadata RELEASE_IMAGE)
+          digest=$(read_metadata RELEASE_IMAGE_DIGEST)
+          image_ref=$(read_metadata RELEASE_IMAGE_REF)
+          prerelease=$(read_metadata RELEASE_PRERELEASE)
 
-                  for value_name in tag version release_branch release_base_source_sha release_source_sha image digest image_ref prerelease; do
-                    if [ -z "${!value_name}" ]; then
-                      echo "Missing release metadata value: ${value_name}." >&2
-                      exit 1
-                    fi
-                  done
+          for value_name in tag version release_branch release_base_source_sha release_source_sha image digest image_ref prerelease; do
+            if [ -z "${!value_name}" ]; then
+              echo "Missing release metadata value: ${value_name}." >&2
+              exit 1
+            fi
+          done
 
-                  if [ "${HEAD_BRANCH}" != "${tag}" ]; then
-                    echo "Expected temporary release preparation branch ${tag}, got ${HEAD_BRANCH}." >&2
-                    exit 1
-                  fi
+          if [ "${HEAD_BRANCH}" != "${tag}" ]; then
+            echo "Expected temporary release preparation branch ${tag}, got ${HEAD_BRANCH}." >&2
+            exit 1
+          fi
 
-                  if ! printf '%s' "${tag}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'; then
-                    echo "Release tag must match v<major>.<minor>.<patch> with an optional prerelease." >&2
-                    exit 1
-                  fi
+          if ! printf '%s' "${tag}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'; then
+            echo "Release tag must match v<major>.<minor>.<patch> with an optional prerelease." >&2
+            exit 1
+          fi
 
-                  if [ "${version}" != "${tag#v}" ]; then
-                    echo "Release version ${version} does not match tag ${tag}." >&2
-                    exit 1
-                  fi
+          if [ "${version}" != "${tag#v}" ]; then
+            echo "Release version ${version} does not match tag ${tag}." >&2
+            exit 1
+          fi
 
-                  stable_version="${version%%-*}"
-                  major="${stable_version%%.*}"
-                  rest="${stable_version#*.}"
-                  minor="${rest%%.*}"
-                  major_minor="${major}.${minor}"
-                  expected_release_branch="v${major_minor}"
+          stable_version="${version%%-*}"
+          major="${stable_version%%.*}"
+          rest="${stable_version#*.}"
+          minor="${rest%%.*}"
+          major_minor="${major}.${minor}"
+          expected_release_branch="v${major_minor}"
 
-                  if [ "${release_branch}" != "${expected_release_branch}" ] || [ "${BASE_BRANCH}" != "${expected_release_branch}" ]; then
-                    echo "Expected release line branch ${expected_release_branch}, got metadata ${release_branch} and PR base ${BASE_BRANCH}." >&2
-                    exit 1
-                  fi
+          if [ "${release_branch}" != "${expected_release_branch}" ] || [ "${BASE_BRANCH}" != "${expected_release_branch}" ]; then
+            echo "Expected release line branch ${expected_release_branch}, got metadata ${release_branch} and PR base ${BASE_BRANCH}." >&2
+            exit 1
+          fi
 
-                  expected_prerelease=false
-                  if [ "${stable_version}" != "${version}" ]; then
-                    expected_prerelease=true
-                  fi
+          expected_prerelease=false
+          if [ "${stable_version}" != "${version}" ]; then
+            expected_prerelease=true
+          fi
 
-                  if [ "${prerelease}" != "${expected_prerelease}" ]; then
-                    echo "Release prerelease metadata ${prerelease} does not match tag ${tag}." >&2
-                    exit 1
-                  fi
+          if [ "${prerelease}" != "${expected_prerelease}" ]; then
+            echo "Release prerelease metadata ${prerelease} does not match tag ${tag}." >&2
+            exit 1
+          fi
 
-                  if ! printf '%s' "${release_source_sha}" | grep -Eq '^[a-fA-F0-9]{40}$'; then
-                    echo "Release source SHA is not a full git SHA." >&2
-                    exit 1
-                  fi
+          if ! printf '%s' "${release_source_sha}" | grep -Eq '^[a-fA-F0-9]{40}$'; then
+            echo "Release source SHA is not a full git SHA." >&2
+            exit 1
+          fi
 
-                  if ! printf '%s' "${release_base_source_sha}" | grep -Eq '^[a-fA-F0-9]{40}$'; then
-                    echo "Release base source SHA is not a full git SHA." >&2
-                    exit 1
-                  fi
+          if ! printf '%s' "${release_base_source_sha}" | grep -Eq '^[a-fA-F0-9]{40}$'; then
+            echo "Release base source SHA is not a full git SHA." >&2
+            exit 1
+          fi
 
-                  if [ "${image}" != "${PREBUILT_TYPO3PHPFPM_IMAGE}" ]; then
-                    echo "Release image must be ${PREBUILT_TYPO3PHPFPM_IMAGE}." >&2
-                    exit 1
-                  fi
+          if [ "${image}" != "${PREBUILT_TYPO3PHPFPM_IMAGE}" ]; then
+            echo "Release image must be ${PREBUILT_TYPO3PHPFPM_IMAGE}." >&2
+            exit 1
+          fi
 
-                  if ! printf '%s' "${digest}" | grep -Eq '^sha256:[a-f0-9]{64}$'; then
-                    echo "Release image digest is not a valid sha256 digest." >&2
-                    exit 1
-                  fi
+          if ! printf '%s' "${digest}" | grep -Eq '^sha256:[a-f0-9]{64}$'; then
+            echo "Release image digest is not a valid sha256 digest." >&2
+            exit 1
+          fi
 
-                  expected_image_ref="${image}:${tag}@${digest}"
-                  if [ "${image_ref}" != "${expected_image_ref}" ]; then
-                    echo "Release image ref must be ${expected_image_ref}." >&2
-                    exit 1
-                  fi
+          expected_image_ref="${image}:${tag}@${digest}"
+          if [ "${image_ref}" != "${expected_image_ref}" ]; then
+            echo "Release image ref must be ${expected_image_ref}." >&2
+            exit 1
+          fi
 
-                  expected_image_line="${PREBUILT_TYPO3PHPFPM_IMAGE_TEMPLATE_PREFIX}${expected_image_ref}${PREBUILT_TYPO3PHPFPM_IMAGE_TEMPLATE_SUFFIX}"
-                  if ! grep -qxF "${expected_image_line}" .env.tmpl; then
-                    echo ".env.tmpl must pin ${expected_image_ref}." >&2
-                    exit 1
-                  fi
+          expected_image_line="${PREBUILT_TYPO3PHPFPM_IMAGE_TEMPLATE_PREFIX}${expected_image_ref}${PREBUILT_TYPO3PHPFPM_IMAGE_TEMPLATE_SUFFIX}"
+          if ! grep -qxF "${expected_image_line}" .env.tmpl; then
+            echo ".env.tmpl must pin ${expected_image_ref}." >&2
+            exit 1
+          fi
 
-                  git cat-file -e "${release_source_sha}^{commit}"
-                  git cat-file -e "${release_base_source_sha}^{commit}"
+          read -r merge_commit first_parent second_parent extra_parent < <(git rev-list --parents -n 1 "${MERGE_COMMIT}")
+          if [ -z "${first_parent}" ] || [ -z "${second_parent}" ] || [ -n "${extra_parent}" ]; then
+            echo "Release PR must be merged with 'Create a merge commit'. Squash, rebase, and octopus merges cannot be finalized." >&2
+            exit 1
+          fi
 
-                  source_parent=$(git rev-parse "${release_source_sha}^")
-                  if [ "${source_parent}" != "${release_base_source_sha}" ]; then
-                    echo "Release source commit ${release_source_sha} was not created from ${release_base_source_sha}." >&2
-                    exit 1
-                  fi
+          if [ "${first_parent}" != "${release_base_source_sha}" ]; then
+            echo "Release branch changed after the release image was built. Start the release workflow again from the current ${BASE_BRANCH} branch." >&2
+            exit 1
+          fi
 
-                  read -r merge_commit first_parent second_parent extra_parent < <(git rev-list --parents -n 1 "${MERGE_COMMIT}")
-                  if [ -z "${first_parent}" ] || [ -z "${second_parent}" ] || [ -n "${extra_parent}" ]; then
-                    echo "Release PR must be merged with a regular merge commit, not squash, rebase, or octopus merge." >&2
-                    exit 1
-                  fi
+          if ! git cat-file -e "${release_source_sha}^{commit}"; then
+            echo "Release source commit ${release_source_sha} is not available in the merged PR history." >&2
+            echo "Release PRs must be merged with 'Create a merge commit', not squash or rebase." >&2
+            exit 1
+          fi
 
-                  if [ "${first_parent}" != "${release_base_source_sha}" ]; then
-                    echo "Release branch changed after the release image was built. Start the release workflow again from the current ${BASE_BRANCH} branch." >&2
-                    exit 1
-                  fi
+          git cat-file -e "${release_base_source_sha}^{commit}"
 
-                  git merge-base --is-ancestor "${release_source_sha}" "${MERGE_COMMIT}"
+          if ! git merge-base --is-ancestor "${release_source_sha}" "${second_parent}"; then
+            echo "Release source commit ${release_source_sha} is not part of the merged PR head ${second_parent}." >&2
+            exit 1
+          fi
 
-                  {
-                    echo "digest=${digest}"
-                    echo "image=${image}"
-                    echo "major=${major}"
-                    echo "major_minor=${major_minor}"
-                    echo "prerelease=${prerelease}"
-                    echo "release_source_sha=${release_source_sha}"
-                    echo "tag=${tag}"
-                    echo "version=${version}"
-                  } >> "$GITHUB_OUTPUT"
+          source_parent=$(git rev-parse "${release_source_sha}^")
+          if [ "${source_parent}" != "${release_base_source_sha}" ]; then
+            echo "Release source commit ${release_source_sha} was not created from ${release_base_source_sha}." >&2
+            exit 1
+          fi
 
-            - name: Ensure release does not already exist
-              shell: bash
-              env:
-                  GH_TOKEN: ${{ github.token }}
-                  TAG: ${{ steps.prep.outputs.tag }}
-              run: |
-                  set -euo pipefail
+          git merge-base --is-ancestor "${release_source_sha}" "${MERGE_COMMIT}"
 
-                  if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-                    echo "Release ${TAG} already exists." >&2
-                    exit 1
-                  fi
+          {
+            echo "digest=${digest}"
+            echo "image=${image}"
+            echo "major=${major}"
+            echo "major_minor=${major_minor}"
+            echo "prerelease=${prerelease}"
+            echo "release_source_sha=${release_source_sha}"
+            echo "tag=${tag}"
+            echo "version=${version}"
+          } >> "$GITHUB_OUTPUT"
 
-                  if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
-                    echo "Git tag ${TAG} already exists." >&2
-                    exit 1
-                  fi
+      - name: Ensure release does not already exist
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.prep.outputs.tag }}
+        run: |
+          set -euo pipefail
 
-            - name: Promote release image tags
-              shell: bash
-              env:
-                  DIGEST: ${{ steps.prep.outputs.digest }}
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  IMAGE: ${{ steps.prep.outputs.image }}
-                  MAJOR: ${{ steps.prep.outputs.major }}
-                  MAJOR_MINOR: ${{ steps.prep.outputs.major_minor }}
-                  PRERELEASE: ${{ steps.prep.outputs.prerelease }}
-                  TAG: ${{ steps.prep.outputs.tag }}
-                  VERSION: ${{ steps.prep.outputs.version }}
-              run: |
-                  set -euo pipefail
+          if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists." >&2
+            exit 1
+          fi
 
-                  source_ref="docker://${IMAGE}@${DIGEST}"
-                  final_tags=("${TAG}" "${VERSION}")
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Git tag ${TAG} already exists." >&2
+            exit 1
+          fi
 
-                  if [ "${PRERELEASE}" != "true" ]; then
-                    final_tags+=("${MAJOR_MINOR}" "${MAJOR}" "latest")
-                  fi
+      - name: Promote release image tags
+        shell: bash
+        env:
+          DIGEST: ${{ steps.prep.outputs.digest }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ steps.prep.outputs.image }}
+          MAJOR: ${{ steps.prep.outputs.major }}
+          MAJOR_MINOR: ${{ steps.prep.outputs.major_minor }}
+          PRERELEASE: ${{ steps.prep.outputs.prerelease }}
+          TAG: ${{ steps.prep.outputs.tag }}
+          VERSION: ${{ steps.prep.outputs.version }}
+        run: |
+          set -euo pipefail
 
-                  unique_tags=()
-                  for final_tag in "${final_tags[@]}"; do
-                    skip=0
-                    for existing in "${unique_tags[@]}"; do
-                      if [ "${existing}" = "${final_tag}" ]; then
-                        skip=1
-                        break
-                      fi
-                    done
-                    if [ "${skip}" -eq 0 ]; then
-                      unique_tags+=("${final_tag}")
-                    fi
-                  done
+          source_ref="docker://${IMAGE}@${DIGEST}"
+          final_tags=("${TAG}" "${VERSION}")
 
-                  for final_tag in "${unique_tags[@]}"; do
-                    sudo skopeo copy --all \
-                      --src-creds "${GITHUB_ACTOR}:${GITHUB_TOKEN}" \
-                      --dest-creds "${GITHUB_ACTOR}:${GITHUB_TOKEN}" \
-                      "${source_ref}" \
-                      "docker://${IMAGE}:${final_tag}"
-                  done
+          if [ "${PRERELEASE}" != "true" ]; then
+            final_tags+=("${MAJOR_MINOR}" "${MAJOR}" "latest")
+          fi
 
-                  resolved_digest=$(sudo skopeo inspect \
-                    --creds "${GITHUB_ACTOR}:${GITHUB_TOKEN}" \
-                    --format '{{.Digest}}' \
-                    "docker://${IMAGE}:${TAG}")
+          unique_tags=()
+          for final_tag in "${final_tags[@]}"; do
+            skip=0
+            for existing in "${unique_tags[@]}"; do
+              if [ "${existing}" = "${final_tag}" ]; then
+                skip=1
+                break
+              fi
+            done
+            if [ "${skip}" -eq 0 ]; then
+              unique_tags+=("${final_tag}")
+            fi
+          done
 
-                  if [ "${resolved_digest}" != "${DIGEST}" ]; then
-                    echo "Expected ${IMAGE}:${TAG} to resolve to ${DIGEST}, got ${resolved_digest}." >&2
-                    exit 1
-                  fi
+          for final_tag in "${unique_tags[@]}"; do
+            sudo skopeo copy --all \
+              --src-creds "${GITHUB_ACTOR}:${GITHUB_TOKEN}" \
+              --dest-creds "${GITHUB_ACTOR}:${GITHUB_TOKEN}" \
+              "${source_ref}" \
+              "docker://${IMAGE}:${final_tag}"
+          done
 
-            - name: Create Git tag and GitHub release
-              shell: bash
-              env:
-                  GH_TOKEN: ${{ github.token }}
-                  HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
-                  PRERELEASE: ${{ steps.prep.outputs.prerelease }}
-                  RELEASE_SOURCE_SHA: ${{ steps.prep.outputs.release_source_sha }}
-                  TAG: ${{ steps.prep.outputs.tag }}
-              run: |
-                  set -euo pipefail
+          resolved_digest=$(sudo skopeo inspect \
+            --creds "${GITHUB_ACTOR}:${GITHUB_TOKEN}" \
+            --format '{{.Digest}}' \
+            "docker://${IMAGE}:${TAG}")
 
-                  git config user.name "github-actions[bot]"
-                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "${resolved_digest}" != "${DIGEST}" ]; then
+            echo "Expected ${IMAGE}:${TAG} to resolve to ${DIGEST}, got ${resolved_digest}." >&2
+            exit 1
+          fi
 
-                  if [ "${HEAD_BRANCH}" = "${TAG}" ] && git ls-remote --exit-code --heads origin "${TAG}" >/dev/null 2>&1; then
-                    git push origin ":refs/heads/${TAG}"
-                  fi
+      - name: Create Git tag and GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PRERELEASE: ${{ steps.prep.outputs.prerelease }}
+          RELEASE_SOURCE_SHA: ${{ steps.prep.outputs.release_source_sha }}
+          TAG: ${{ steps.prep.outputs.tag }}
+        run: |
+          set -euo pipefail
 
-                  git tag -a "${TAG}" -m "${TAG}" "${RELEASE_SOURCE_SHA}"
-                  git push origin "refs/tags/${TAG}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-                  release_args=(
-                    --repo "${GITHUB_REPOSITORY}"
-                    --target "${RELEASE_SOURCE_SHA}"
-                    --generate-notes
-                    --title "${TAG}"
-                  )
+          if [ "${HEAD_BRANCH}" = "${TAG}" ] && git ls-remote --exit-code --heads origin "${TAG}" >/dev/null 2>&1; then
+            git push origin ":refs/heads/${TAG}"
+          fi
 
-                  if [ "${PRERELEASE}" = "true" ]; then
-                    release_args+=(--prerelease)
-                  fi
+          git tag -a "${TAG}" -m "${TAG}" "${RELEASE_SOURCE_SHA}"
+          git push origin "refs/tags/${TAG}"
 
-                  gh release create "${TAG}" "${release_args[@]}"
+          release_args=(
+            --repo "${GITHUB_REPOSITORY}"
+            --target "${RELEASE_SOURCE_SHA}"
+            --generate-notes
+            --title "${TAG}"
+          )
+
+          if [ "${PRERELEASE}" = "true" ]; then
+            release_args+=(--prerelease)
+          fi
+
+          gh release create "${TAG}" "${release_args[@]}"

@@ -625,6 +625,7 @@ jobs:
             printf 'Release source commit built into the image:\n%s\n\n' "${RELEASE_SOURCE_SHA}"
             printf 'This PR pins .env.tmpl to:\n%s\n\n' "${release_image}"
             printf 'Release candidate image:\n%s:%s\n\n' "${IMAGE}" "${CANDIDATE_TAG}"
+            printf '%s\n\n' 'Merge method: use Create a merge commit. Do not squash or rebase this PR.'
             printf '%s\n' 'Merging this PR triggers the Finalize release workflow. That workflow promotes the pinned digest to the final container tags, creates the git tag on the release source commit, and creates the GitHub Release.'
           } > "${body_file}"
 
