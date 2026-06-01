@@ -41,10 +41,7 @@ jobs:
     name: Build ${{ matrix.arch }} image
     if: >-
       github.event_name != 'push' ||
-      (
-        !startsWith(github.event.head_commit.message, 'chore(release): v') &&
-        !contains(github.event.head_commit.message, 'release/v')
-      )
+      !startsWith(github.event.head_commit.message, 'chore(release): v')
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
