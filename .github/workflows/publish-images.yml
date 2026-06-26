@@ -34,7 +34,7 @@ env:
   OCI_LICENSES: AGPL-3.0-only
   OCI_TITLE: TYPO3 PHP-FPM
   OCI_VENDOR: Strukturpiloten
-  SYFT_VERSION: v1.45.1
+  SYFT_VERSION: v1.46.0
 
 jobs:
   build-arch-image:
