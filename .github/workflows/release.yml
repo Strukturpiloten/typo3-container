@@ -39,7 +39,7 @@ env:
   PREBUILT_TYPO3PHPFPM_IMAGE_TEMPLATE_PREFIX: "PODMAN_TYPO3PHPFPM_IMAGE={{ if .UsePrebuiltTYPO3PHPFPMImage }}"
   PREBUILT_TYPO3PHPFPM_IMAGE_TEMPLATE_SUFFIX: "{{ else }}{{ .PodmanNamespace }}-{{ .PodmanService }}-{{ .PodmanStage }}-typo3-phpfpm:latest{{ end }}"
   RELEASE_METADATA_FILE: .release.env
-  SYFT_VERSION: v1.45.1
+  SYFT_VERSION: v1.46.0
 
 jobs:
   prepare-release:
