@@ -36,13 +36,6 @@ variables:
       - postgresql
     default: postgresql
 
-  - name: UsePrebuiltTYPO3PHPFPMImage
-    flag: use-prebuilt-typo3-phpfpm-image
-    prompt: Use pre-built TYPO3 PHP-FPM image
-    description: "Whether to use the published TYPO3 PHP-FPM image instead of building it locally: true or false"
-    type: bool
-    default: true
-
   - name: UserUID
     flag: uid
     prompt: User ID
@@ -156,9 +149,6 @@ state:
   output: "{{ .DataDir }}/setup.json"
   mode: "0644"
   entries:
-    - key: use_prebuilt_typo3_phpfpm_image
-      variable: UsePrebuiltTYPO3PHPFPMImage
-      type: bool
     - key: database_sql
       variable: DatabaseSQL
     - key: data_dir
@@ -194,9 +184,9 @@ messages:
 
     Run from inside "{{ .DataDir }}", but `-f` can be omitted:
       cd "{{ .DataDir }}"
-      podman compose -f "compose.yaml" --env-file ".env" up -d{{ if not .UsePrebuiltTYPO3PHPFPMImage }} --build{{ end }}
+      podman compose -f "compose.yaml" --env-file ".env" up -d
 
     Run from anywhere:
-      podman compose -f "{{ .DataDir }}/compose.yaml" --env-file "{{ .DataDir }}/.env" up -d{{ if not .UsePrebuiltTYPO3PHPFPMImage }} --build{{ end }}
+      podman compose -f "{{ .DataDir }}/compose.yaml" --env-file "{{ .DataDir }}/.env" up -d
 
     For Docker use the same commands with `docker compose ...`.
