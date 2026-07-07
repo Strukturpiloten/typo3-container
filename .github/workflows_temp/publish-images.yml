@@ -34,7 +34,7 @@ env:
   OCI_LICENSES: AGPL-3.0-only
   OCI_TITLE: TYPO3 PHP-FPM
   OCI_VENDOR: Strukturpiloten
-  SYFT_VERSION: v1.45.1
+  SYFT_VERSION: v1.46.0
 
 jobs:
   build-arch-image:
@@ -324,14 +324,14 @@ jobs:
           cosign sign --yes --recursive "${IMAGE}@${INDEX_DIGEST}"
 
       - name: Attest build provenance
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-digest: ${{ steps.digests.outputs.index_digest }}
           subject-name: ${{ steps.prep.outputs.image }}
           push-to-registry: true
 
       - name: Attest amd64 SBOM
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-digest: ${{ steps.digests.outputs.amd64_digest }}
           subject-name: ${{ steps.prep.outputs.image }}
@@ -340,7 +340,7 @@ jobs:
           create-storage-record: false
 
       - name: Attest arm64 SBOM
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-digest: ${{ steps.digests.outputs.arm64_digest }}
           subject-name: ${{ steps.prep.outputs.image }}
