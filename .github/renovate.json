@@ -16,7 +16,7 @@
                 "/(^|\\/)\\.env\\.tmpl$/"
             ],
             "matchStrings": [
-                "PODMAN_(?:MARIADB|POSTGRES|NGINX|TYPO3PHPFPM_BASE)_IMAGE=(?<depName>[^:@\\s]+(?:\\/[^:@\\s]+)*):(?<currentValue>[^@\\s]+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?"
+                "PODMAN_(?:MARIADB|POSTGRES|NGINX|TYPO3PHPFPM)_IMAGE=(?<depName>[^:@\\s]+(?:\/[^:@\\s]+)*):(?<currentValue>[^@\\s]+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?"
             ],
             "datasourceTemplate": "docker"
         },
@@ -30,48 +30,6 @@
                 "TYPO3_VERSION=(?<currentValue>[^\\n]+)\\nTYPO3_COMPOSER_PACKAGE=(?<depName>[^\\n]+)"
             ],
             "datasourceTemplate": "packagist"
-        },
-        {
-            "customType": "regex",
-            "description": "Track install-php-extensions release version in container recipes",
-            "managerFilePatterns": [
-                "/^compose\\/[^\\/]+\\/[^\\/]+$/"
-            ],
-            "matchStrings": [
-                "ARG INSTALL_PHP_EXTENSIONS_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
-            ],
-            "depNameTemplate": "mlocati/docker-php-extension-installer",
-            "packageNameTemplate": "mlocati/docker-php-extension-installer",
-            "datasourceTemplate": "github-releases",
-            "versioningTemplate": "semver-coerced"
-        },
-        {
-            "customType": "regex",
-            "description": "Track pinned cosign binary releases in GitHub workflows",
-            "managerFilePatterns": [
-                "/^\\.github\\/workflows\\/[^\\/]+\\.yml$/"
-            ],
-            "matchStrings": [
-                "cosign-release:\\s*(?<currentValue>v?\\d+\\.\\d+\\.\\d+)"
-            ],
-            "depNameTemplate": "sigstore/cosign",
-            "packageNameTemplate": "sigstore/cosign",
-            "datasourceTemplate": "github-releases",
-            "versioningTemplate": "semver-coerced"
-        },
-        {
-            "customType": "regex",
-            "description": "Track pinned Syft binary releases in GitHub workflows",
-            "managerFilePatterns": [
-                "/^\\.github\\/workflows\\/[^\\/]+\\.yml$/"
-            ],
-            "matchStrings": [
-                "SYFT_VERSION:\\s*(?<currentValue>v?\\d+\\.\\d+\\.\\d+)"
-            ],
-            "depNameTemplate": "anchore/syft",
-            "packageNameTemplate": "anchore/syft",
-            "datasourceTemplate": "github-releases",
-            "versioningTemplate": "semver-coerced"
         },
         {
             "customType": "regex",
@@ -108,16 +66,6 @@
             "pinDigests": true
         },
         {
-            "description": "Use a readable topic for install-php-extensions updates",
-            "matchManagers": [
-                "custom.regex"
-            ],
-            "matchPackageNames": [
-                "mlocati/docker-php-extension-installer"
-            ],
-            "commitMessageTopic": "install-php-extensions"
-        },
-        {
             "description": "Use a readable topic for TYPO3 distribution updates",
             "matchManagers": [
                 "custom.regex"
@@ -129,26 +77,6 @@
                 "typo3/cms-base-distribution"
             ],
             "commitMessageTopic": "TYPO3 distribution"
-        },
-        {
-            "description": "Use a readable topic for Cosign updates",
-            "matchManagers": [
-                "custom.regex"
-            ],
-            "matchPackageNames": [
-                "sigstore/cosign"
-            ],
-            "commitMessageTopic": "cosign"
-        },
-        {
-            "description": "Use a readable topic for Syft updates",
-            "matchManagers": [
-                "custom.regex"
-            ],
-            "matchPackageNames": [
-                "anchore/syft"
-            ],
-            "commitMessageTopic": "syft"
         },
         {
             "description": "Automerge pinned container digest updates",
@@ -200,10 +128,7 @@
                 "custom.regex"
             ],
             "matchPackageNames": [
-                "Strukturpiloten/container-setup",
-                "anchore/syft",
-                "mlocati/docker-php-extension-installer",
-                "sigstore/cosign"
+                "Strukturpiloten/container-setup"
             ],
             "matchUpdateTypes": [
                 "minor",

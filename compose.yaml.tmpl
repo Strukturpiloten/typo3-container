@@ -45,14 +45,6 @@ services:
     #   interval: 10s
     #   timeout: 5s
     #   retries: 4
-{{- if not .UsePrebuiltTYPO3PHPFPMImage }}
-    build:
-      context: {{ printf "%q" .ProjectDir }}
-      dockerfile: compose/typo3-phpfpm/typo3-phpfpm
-      args:
-        PODMAN_TYPO3PHPFPM_BASE_IMAGE: ${PODMAN_TYPO3PHPFPM_BASE_IMAGE}
-        PODMAN_TYPO3_DATA_DIR_CONTAINER: ${PODMAN_TYPO3_DATA_DIR_CONTAINER}
-{{- end }}
     depends_on:
       {{ .DatabaseSQLService }}:
         condition: service_healthy
