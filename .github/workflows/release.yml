@@ -32,7 +32,7 @@ env:
 
 jobs:
   prepare-release:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       base_source_sha: ${{ steps.version.outputs.base_source_sha }}
       major: ${{ steps.version.outputs.major }}
@@ -153,7 +153,7 @@ jobs:
   prepare-release-source:
     name: Prepare release source
     needs: prepare-release
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       release_source_sha: ${{ steps.source.outputs.release_source_sha }}
 
@@ -257,7 +257,7 @@ jobs:
     needs:
       - prepare-release
       - prepare-release-source
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
       - name: Check out default branch
@@ -410,7 +410,7 @@ jobs:
     needs:
       - prepare-release
       - prepare-release-source
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
       - name: Check out release preparation branch
